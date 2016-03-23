@@ -37,8 +37,8 @@ def analyze(filename):
     except:
       print "FATAL ERROR ON LINE %d" % line_number
       raise
-  from pprint import pprint
-  pprint(word_counts)
+
+  print "Loaded %d words" % len(word_counts)
 
 
 
