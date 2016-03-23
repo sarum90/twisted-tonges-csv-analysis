@@ -84,6 +84,15 @@ class TestWordParsing(unittest.TestCase):
         ]
     )
 
+    self.assertEqual(
+        make_morphemes('la-bp-o', 'PART-bat-log', '1.2'),
+        [
+          make_morpheme('la', '1', is_particle=True),
+          make_morpheme('bp', ''),
+          make_morpheme('o', '2', is_suffix=True),
+        ]
+    )
+
   def test_make_morphemes_unequal(self):
     """
     Making morphemes out of words within unequal numbers of morphemes is
