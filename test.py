@@ -28,12 +28,24 @@ class TestWordParsing(unittest.TestCase):
   def test_letters_split(self):
     for input_text, expected in [
       (u'kɔ', [u'k', u'ɔ']),
-      (u'k\~ɔ', [u'k', u'\~ɔ']),
-      (u'k^{w}ɔ', [u'k^{w}', u'ɔ']),
-      (u'k^{w}\~ɔ', [u'k^{w}', u'\~ɔ']),
+      (u' k\~ɔ', [u'k', u'\~ɔ']),
+      (u'kɔ^~', [u'k', u'\~ɔ']),
+      (u'kɔ^{~}', [u'k', u'\~ɔ']),
+      (u'kɔ~', [u'k', u'\~ɔ']),
+      (u'k^{w} ɔ', [u'k^{w}', u'ɔ']),
+      (u'k^{w}(\~ɔ)', [u'k^{w}', u'\~ɔ']),
+      (u'k^{w}ɔ:', [u'k^{w}', u'ɔ:']),
     ]:
       self.assertEqual(make_letters(input_text),
                        list(make_letter(x) for x in expected))
+    for input_text, expected in [
+      (u'k\~ɔ', [u'k', u'ɔ']),
+      (u' k^{w}ɔ', [u'k', u'ɔ']),
+      (u'\tk^{w}\~ɔ', [u'k', u'ɔ']),
+      (u'k^{w}ɔ:', [u'k^{w}', u'ɔ']),
+    ]:
+      self.assertNotEqual(make_letters(input_text),
+                          list(make_letter(x) for x in expected))
 
   def test_invalid_letters(self):
     self.assertRaises(InvalidLetter, lambda: make_letter('a^{w}'))
@@ -63,7 +75,7 @@ class TestWordParsing(unittest.TestCase):
 
   def test_make_morphemes(self):
     self.assertEqual(
-        make_morphemes('ku-lala-bi-pod', 'PART-bat-mouse-PART', '1-2.3-4-5'),
+        make_morphemes('ku-lala-bi-pod', 'PART-bat-mouse-PART', '1.2.3.4.5'),
         [
           make_morpheme('ku', '1', is_particle=True),
           make_morpheme('lala', '2.3'),
@@ -79,15 +91,15 @@ class TestWordParsing(unittest.TestCase):
     """
     self.assertRaises(
         MorphemeMismatch,
-        lambda: make_morphemes('a-b', 'c-d', '1-2-3')
+        lambda: make_morphemes('a-bi', 'ca-de', '1.2.3')
     )
     self.assertRaises(
         MorphemeMismatch,
-        lambda: make_morphemes('a-b-z', 'c-d', '1-2')
+        lambda: make_morphemes('a-b-z', 'c-d', '1.2')
     )
     self.assertRaises(
         MorphemeMismatch,
-        lambda: make_morphemes('a-b', 'c-d-e', '1-2')
+        lambda: make_morphemes('a-b', 'c-d-e', '1.2')
     )
 
   def test_bad_word_tone(self):
@@ -114,8 +126,8 @@ class TestWordParsing(unittest.TestCase):
     Verify that words are correctly parsed into morphemes.
     """
     for parsed, manually in [
-        (make_word('koka-nu-po^{12.3-4-56}', 'PART-B-C', 'N'),
-          Word(make_morphemes('koka-nu-po', 'PART-B-C', '12.3-4-56'), 'N')),
+        (make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N'),
+          Word(make_morphemes('koka-nu-po', 'PART-B-C', '12.3.4.56'), 'N')),
         (make_word('a^{1}', 'A', 'V'),
           Word(make_morphemes('a', 'A', '1'), 'V')),
         ]:

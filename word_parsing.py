@@ -1,5 +1,5 @@
 
-from itertools import izip_longest
+from itertools import izip_longest, islice
 import re
 
 from letters import is_vowell
@@ -59,6 +59,9 @@ class Syllable(object):
 
   def __repr__(self):
     return u'<Syllable(%s, %s)>' % (repr(self._letters), repr(self._tone))
+  
+  def has_vowell(self):
+    return any(l.is_vowell() for l in self._letters)
 
 class InvalidLetter(WordParseError):
   pass
@@ -69,18 +72,19 @@ class Letter(object):
 
   Has the logic built-in to determine if it is or is not a vowell.
 
-  This is tracked as a single unicode character, and two bits that mark nasal
-  and labialized diacritics.
+  This is tracked as a single unicode character, and some bits that mark nasal,
+  labialized, and long-vowell diacritics.
   """
   
-  def __init__(self, text, is_nasal, is_labialized):
+  def __init__(self, text, is_nasal, is_labialized, is_long):
     if is_nasal and is_labialized:
       raise InvalidLetter('Cannot be both nasal and have a raised w')
     self._text = text
     self._is_nasal = is_nasal
     self._is_labialized = is_labialized
+    self._is_long = is_long
 
-    if is_nasal and not self.is_vowell():
+    if (is_nasal or is_long) and not self.is_vowell():
       raise InvalidLetter('Nasal letters must be vowells (%s)' % repr(self))
 
     if is_labialized and self.is_vowell():
@@ -94,7 +98,8 @@ class Letter(object):
     return (
         self._text == other._text and 
         self._is_labialized == other._is_labialized and 
-        self._is_nasal == other._is_nasal
+        self._is_nasal == other._is_nasal and 
+        self._is_long == other._is_long
     )
 
   def _nasal_prefix(self):
@@ -102,7 +107,9 @@ class Letter(object):
       return '/~'
     return ''
 
-  def _labialized_suffix(self):
+  def _suffix(self):
+    if self._is_long:
+      return ':'
     if self._is_labialized:
       return '^{w}'
     return ''
@@ -110,41 +117,72 @@ class Letter(object):
   def text(self):
     return u'%s%s%s' % (self._nasal_prefix(),
                         self._text,
-                        self._labialized_suffix())
+                        self._suffix())
 
   def __repr__(self):
     return u'<Letter %s>' % repr(self.text())
 
 _NASAL = '\~'
+_LONG = ':'
 _LABIALIZED = '^{w}'
+_NASAL_SUFFIX_1 = '^~'
+_NASAL_SUFFIX_2 = '^{~}'
+_NASAL_SUFFIX_3 = '~'
 
 def make_letter(text):
   is_labialized = False
   is_nasal = False
+  is_long = False
   if text.startswith(_NASAL):
     text = text[len(_NASAL):]
     is_nasal = True
   if text.endswith(_LABIALIZED):
     text = text[:-len(_LABIALIZED)]
     is_labialized = True
-  return Letter(text, is_nasal, is_labialized)
+  if text.endswith(_LONG):
+    text = text[:-len(_LONG)]
+    is_long = True
+  if text.endswith(_NASAL_SUFFIX_1):
+    text = text[:-len(_NASAL_SUFFIX_1)]
+    is_nasal = True
+  if text.endswith(_NASAL_SUFFIX_2):
+    text = text[:-len(_NASAL_SUFFIX_2)]
+    is_nasal = True
+  if text.endswith(_NASAL_SUFFIX_3):
+    text = text[:-len(_NASAL_SUFFIX_3)]
+    is_nasal = True
+  return Letter(text, is_nasal, is_labialized, is_long)
+
+def _clean_text(text):
+  processed_text = text
+  for removed_letter in u'() \xa0':
+    processed_text = processed_text.replace(removed_letter, '')
+  return processed_text
 
 def make_letters(text):
   result = []
-  while text:
+  processed_text = _clean_text(text)
+  while processed_text:
     split = 1
-    if text.startswith(_NASAL):
+    if processed_text.startswith(_NASAL):
       split = len(_NASAL)+1
 
-    letter = text[:split]
-    rest = text[split:]
+    letter = processed_text[:split]
+    rest = processed_text[split:]
 
-    if rest.startswith(_LABIALIZED):
-      letter += rest[:len(_LABIALIZED)]
-      rest = rest[len(_LABIALIZED):]
+    for suffix in [
+        _NASAL_SUFFIX_1,
+        _NASAL_SUFFIX_2,
+        _NASAL_SUFFIX_3,
+        _LABIALIZED,
+        _LONG
+    ]:
+      if rest.startswith(suffix):
+        letter += rest[:len(suffix)]
+        rest = rest[len(suffix):]
 
     result.append(make_letter(letter))
-    text = rest
+    processed_text = rest
   return result
 
 
@@ -189,6 +227,15 @@ def _raise(ex):
   raise ex
 
 
+def _count_syllables(text):
+  x = list(_syllable_letter_grouper(make_letters(text)))
+  if len(x) != 1:
+    return len(x)
+  if any(l.is_vowell() for l in x[0]):
+    return 1
+  return 0
+
+
 def make_syllables(text, tones):
   letters = make_letters(text)
 
@@ -218,25 +265,32 @@ class MorphemeMismatch(WordParseError):
 def make_morphemes(texts, glosses, tones):
   results = []
   have_root = False
-  for text, gloss, tone in izip_longest(
-      texts.split('-'), glosses.split('-'), tones.split('-')):
-    if text is None or gloss is None or tone is None:
+  tone_iter = iter(tones.split('.'))
+  for text, gloss in izip_longest(
+      texts.split('-'), glosses.split('-')):
+    if text is None or gloss is None:
       raise MorphemeMismatch(
         'Could not divide into morphemes text(%s), gloss(%s), tone(%s)' % (
           texts, glosses, tones)
       )
+    tone = '.'.join(list(islice(tone_iter, _count_syllables(text))))
     part = (gloss=="PART")
     suffix = have_root and not part
     results.append(make_morpheme(text, tone, part, suffix))
     have_root = have_root or not part
 
-  return results
+  if next(tone_iter, None) is None:
+    return results
+  raise MorphemeMismatch(
+    'Could not divide into morphemes text(%s), gloss(%s), tone(%s)' % (
+      texts, glosses, tones)
+  )
 
 class BadIPATone(WordParseError):
   pass
 
 def make_word(ipa, gloss, category):
-  if not re.match(r'.*\^\{[0-9.-]+\}$', ipa):
+  if not re.match(r'.*\^\{[0-9.]+\}$', ipa):
     raise BadIPATone("Could not extract tone from ipa(%s)" % repr(ipa))
   breakpoint = ipa.rfind('^')
   text = ipa[:breakpoint]
