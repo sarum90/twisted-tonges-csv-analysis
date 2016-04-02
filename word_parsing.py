@@ -2,47 +2,85 @@
 from itertools import izip_longest, islice
 import re
 
-from letters import is_vowell
+from letters import is_vowell, to_tipa
 
 class WordParseError(Exception):
   pass
 
 class Word(object):
 
-  def __init__(self, morphemes, category):
-    self._morphemes = morphemes
+  def __init__(self, morphemes, syllables, category):
+    self._morphemes = tuple(morphemes)
+    self._syllables = tuple(syllables)
     self._category = category
 
   def __eq__(self, other):
     return (
         self._morphemes == other._morphemes and
+        self._syllables == other._syllables and
         self._category == other._category
     )
 
+  def __ne__(self, other):
+    return not self == other
+
   def __repr__(self):
-    return '<Word(%s, %s)>' % (repr(self._morphemes), repr(self._category))
+    return '<Word(%s, %s, %s)>' % (
+        repr(self._morphemes), repr(syllables), repr(self._category))
+
+  def __hash__(self):
+    return hash((self._morphemes, self._syllables, self._category))
+  
+  def iter_morphemes(self):
+    for m in self._morphemes:
+      yield m
+
+  def iter_syllables(self):
+    for s in self._syllables:
+      yield s
 
 
 class Morpheme(object):
 
-  def __init__(self, syllables, is_particle=False, is_suffix=False):
-    self._syllables = syllables
+  def __init__(self, letters, gloss, is_particle=False, is_suffix=False):
+    self._letters = tuple(letters)
+    self._gloss = gloss
     self._is_particle = is_particle
     self._is_suffix = is_suffix
 
   def __eq__(self, other):
     return (
-        self._syllables == other._syllables and 
+        self._letters == other._letters and 
+        self._gloss == other._gloss and 
         self._is_particle == other._is_particle and 
         self._is_suffix == other._is_suffix
     )
+
+  def __hash__(self):
+    return hash((
+      self._letters,
+      self._gloss,
+      self._is_particle,
+      self._is_suffix,
+    ))
+
+  def __ne__(self, other):
+    return not self == other
 
   def __repr__(self):
     return u'<Morpheme(%s, %s)>' % (repr(list(
         token for flag, token in [(self._is_suffix, 'suffix'),
                                   (self._is_particle, 'particle')]
         if flag
-      )), repr(self._syllables))
+      )), repr(self._letters))
+
+  def iter_letters(self):
+    for l in self._letters:
+      yield l
+
+
+class SyllablesMustHaveVowells(WordParseError):
+  pass
 
 
 class Syllable(object):
@@ -50,6 +88,10 @@ class Syllable(object):
   def __init__(self, letters, tone):
     self._letters = letters
     self._tone = tone
+    if not self.has_vowell():
+      raise SyllablesMustHaveVowells(
+          'Sylable %s with tone %s does not have a vowell' % (
+            self._letters, self._tone))
 
   def __eq__(self, other):
     return (
@@ -57,11 +99,29 @@ class Syllable(object):
         self._tone == other._tone
     )
 
+  def __ne__(self, other):
+    return not self == other
+
+  def letters(self):
+    """
+    Returns a tuple of the letters in this syllable.
+    """
+    return tuple(self._letters)
+
+  def __hash__(self):
+    return hash((
+      self.letters(), self._tone
+    ))
+
   def __repr__(self):
     return u'<Syllable(%s, %s)>' % (repr(self._letters), repr(self._tone))
   
   def has_vowell(self):
     return any(l.is_vowell() for l in self._letters)
+
+  def iter_letters(self):
+    for l in self._letters:
+      yield l
 
 class InvalidLetter(WordParseError):
   pass
@@ -80,6 +140,8 @@ class Letter(object):
     if is_nasal and is_labialized:
       raise InvalidLetter('Cannot be both nasal and have a raised w')
     self._text = text
+    if text == 'r':
+      self._text = 'l'
     self._is_nasal = is_nasal
     self._is_labialized = is_labialized
     self._is_long = is_long
@@ -91,10 +153,20 @@ class Letter(object):
       raise InvalidLetter('Letters with a w must be consonants (%s)' %
                           repr(self))
 
+  @property
+  def is_nasal(self):
+    return self._is_nasal
+
   def is_vowell(self):
     return is_vowell(self._text)
 
+  def to_tipa(self):
+    return '%s%s%s' % (
+        self._nasal_prefix(), to_tipa(self._text), self._suffix())
+
   def __eq__(self, other):
+    if type(self) != type(other):
+      return NotImplemented
     return (
         self._text == other._text and 
         self._is_labialized == other._is_labialized and 
@@ -102,9 +174,37 @@ class Letter(object):
         self._is_long == other._is_long
     )
 
+  def __lt__(self, other):
+    if self._text < other._text:
+      return True
+    if not self._is_nasal and other._is_nasal:
+      return True
+    if not self._is_labialized and other._is_labialized:
+      return True
+    if not self._is_long and other._is_long:
+      return True
+    return False
+
+  def __le__(self, other):
+    return self == other or self < other
+
+  def __gt__(self, other):
+    return not self <= other
+
+  def __ge__(self, other):
+    return not self < other
+
+  def __ne__(self, other):
+    return not self == other
+
+  def __hash__(self):
+    return hash((
+      self._text, self._is_labialized, self._is_nasal, self._is_long
+    ))
+
   def _nasal_prefix(self):
     if self._is_nasal:
-      return '/~'
+      return '\\~'
     return ''
 
   def _suffix(self):
@@ -252,9 +352,10 @@ def make_syllables(text, tones):
     )
   )
 
-def make_morpheme(text, tone, is_particle=False, is_suffix=False):
+def make_morpheme(text, gloss, is_particle=False, is_suffix=False):
   return Morpheme(
-      make_syllables(text, tone),
+      make_letters(text),
+      gloss,
       is_particle=is_particle,
       is_suffix=is_suffix
   )
@@ -262,37 +363,40 @@ def make_morpheme(text, tone, is_particle=False, is_suffix=False):
 class MorphemeMismatch(WordParseError):
   pass
 
-def make_morphemes(texts, glosses, tones):
+def make_morphemes(texts, glosses):
   results = []
   have_root = False
-  tone_iter = iter(tones.split('.'))
   for text, gloss in izip_longest(
       texts.split('-'), glosses.split('-')):
     if text is None or gloss is None:
       raise MorphemeMismatch(
-        'Could not divide into morphemes text(%s), gloss(%s), tone(%s)' % (
-          texts, glosses, tones)
+        'Could not divide into morphemes text(%s), gloss(%s)' % (
+          texts, glosses)
       )
-    tone = '.'.join(list(islice(tone_iter, _count_syllables(text))))
     part = (gloss=="PART")
     suffix = have_root and not part
-    results.append(make_morpheme(text, tone, part, suffix))
+    morpheme_gloss = gloss
+    if part:
+      morpheme_gloss = None
+    results.append(make_morpheme(
+      text, morpheme_gloss, is_particle=part, is_suffix=suffix
+    ))
     have_root = have_root or not part
 
-  if next(tone_iter, None) is None:
-    return results
-  raise MorphemeMismatch(
-    'Could not divide into morphemes text(%s), gloss(%s), tone(%s)' % (
-      texts, glosses, tones)
-  )
+  return results
+
 
 class BadIPATone(WordParseError):
   pass
 
 def make_word(ipa, gloss, category):
-  if not re.match(r'.*\^\{[0-9.]+\}$', ipa):
+  if not re.match(r'.*\^\{[0-9.-]+\}$', ipa):
     raise BadIPATone("Could not extract tone from ipa(%s)" % repr(ipa))
   breakpoint = ipa.rfind('^')
   text = ipa[:breakpoint]
-  tone = ipa[breakpoint+2:-1]
-  return Word(make_morphemes(text, gloss, tone), category)
+  tone = ipa[breakpoint+2:-1].replace('-', '.')
+  return Word(
+      make_morphemes(text, gloss),
+      make_syllables(text.replace('-', ''), tone),
+      category
+  )

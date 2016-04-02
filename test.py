@@ -16,6 +16,7 @@ from word_parsing import (
     make_syllables,
     make_word,
     MorphemeMismatch,
+    SyllablesMustHaveVowells,
     ToneTextSyllableMismatch,
     Word,
 )
@@ -24,6 +25,13 @@ class TestWordParsing(unittest.TestCase):
   """
   Tests for all of the layers of word parsing.
   """
+
+  def test_letter_keys(self):
+    a = {}
+    a[make_letter('l')] = 0
+    a[make_letter('l')] += 1
+    a[make_letter('l')] += 1
+    self.assertEqual(a[make_letter('l')], 2)
 
   def test_letters_split(self):
     for input_text, expected in [
@@ -62,6 +70,19 @@ class TestWordParsing(unittest.TestCase):
     self.assertEqual(make_syllables(u'o', '1234'),
                      [make_syllable(u'o', u'1234')])
 
+  def test_syllable_keys(self):
+    a = {}
+    a[make_syllable(u'ɟe', u'1')] = 0
+    a[make_syllable(u'ɟe', u'1')] += 1
+    a[make_syllable(u'ɟe', u'1')] += 1
+    self.assertEqual(a[make_syllable(u'ɟe', u'1')], 2)
+
+  def test_syllable_must_have_vowell(self):
+    self.assertRaises(
+        SyllablesMustHaveVowells,
+        lambda: make_syllable('l', '1')
+    )
+
   def test_make_syllables_unequal(self):
     self.assertRaises(
         ToneTextSyllableMismatch,
@@ -75,21 +96,21 @@ class TestWordParsing(unittest.TestCase):
 
   def test_make_morphemes(self):
     self.assertEqual(
-        make_morphemes('ku-lala-bi-pod', 'PART-bat-mouse-PART', '1.2.3.4.5'),
+        make_morphemes('ku-lala-bi-pod', 'PART-bat-mouse-PART'),
         [
-          make_morpheme('ku', '1', is_particle=True),
-          make_morpheme('lala', '2.3'),
-          make_morpheme('bi', '4', is_suffix=True),
-          make_morpheme('pod', '5', is_particle=True),
+          make_morpheme('ku', None, is_particle=True),
+          make_morpheme('lala', 'bat'),
+          make_morpheme('bi', 'mouse', is_suffix=True),
+          make_morpheme('pod', None, is_particle=True),
         ]
     )
 
     self.assertEqual(
-        make_morphemes('la-bp-o', 'PART-bat-log', '1.2'),
+        make_morphemes('la-bp-o', 'PART-bat-log'),
         [
-          make_morpheme('la', '1', is_particle=True),
-          make_morpheme('bp', ''),
-          make_morpheme('o', '2', is_suffix=True),
+          make_morpheme('la', None, is_particle=True),
+          make_morpheme('bp', 'bat'),
+          make_morpheme('o', 'log', is_suffix=True),
         ]
     )
 
@@ -100,15 +121,11 @@ class TestWordParsing(unittest.TestCase):
     """
     self.assertRaises(
         MorphemeMismatch,
-        lambda: make_morphemes('a-bi', 'ca-de', '1.2.3')
+        lambda: make_morphemes('a-b-z', 'c-d')
     )
     self.assertRaises(
         MorphemeMismatch,
-        lambda: make_morphemes('a-b-z', 'c-d', '1.2')
-    )
-    self.assertRaises(
-        MorphemeMismatch,
-        lambda: make_morphemes('a-b', 'c-d-e', '1.2')
+        lambda: make_morphemes('a-b', 'c-d-e')
     )
 
   def test_bad_word_tone(self):
@@ -135,12 +152,52 @@ class TestWordParsing(unittest.TestCase):
     Verify that words are correctly parsed into morphemes.
     """
     for parsed, manually in [
-        (make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N'),
-          Word(make_morphemes('koka-nu-po', 'PART-B-C', '12.3.4.56'), 'N')),
-        (make_word('a^{1}', 'A', 'V'),
-          Word(make_morphemes('a', 'A', '1'), 'V')),
+        (
+          make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N'),
+          Word(
+            make_morphemes('koka-nu-po', 'PART-B-C'),
+            make_syllables('kokanupo', '12.3.4.56'),
+            'N')
+          ),
+        (
+          make_word('a^{1}', 'A', 'V'),
+          Word(
+            make_morphemes('a', 'A'),
+            make_syllables('a', '1'),
+            'V'
+          )
+        ),
         ]:
       self.assertEqual(parsed, manually)
+
+  def test_word_dict_key(self):
+    """
+    Words can be dictionary keys.
+    """
+    b = dict()
+    b[make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N')] = 1
+    b[make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N')] += 1
+    b[make_word('koke-nu-po^{12.3.4.56}', 'PART-B-C', 'N')] = 1
+    self.assertEqual(
+          b[make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N')], 2)
+    self.assertEqual(
+          b[make_word('koke-nu-po^{12.3.4.56}', 'PART-B-C', 'N')], 1)
+
+  def test_word_equality(self):
+    """
+    Verify that words are correctly parsed into morphemes.
+    """
+    for a, b in [
+        (make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N'),
+         make_word('koka-nu-po^{12.3.4.65}', 'PART-B-C', 'N'))
+    ]:
+      self.assertNotEqual(a, b)
+
+    for a, b in [
+        (make_word('koka-nu-po^{12.3.4.56}', 'PART-B-C', 'N'),
+         make_word('koka-nu-po^{12.3.4.65}', 'PART-B-C', 'N'))
+    ]:
+      self.assertNotEqual(a, b)
 
 class TestLetters(unittest.TestCase):
   """

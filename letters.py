@@ -2,6 +2,7 @@
 
 import json
 from string import ascii_lowercase
+import string
 
 _get_letters_cache = None
 def _get_letters():
@@ -11,10 +12,10 @@ def _get_letters():
     VOWELLS = set(x for x in 'aeiouy')
     CONSONANTES = set(ascii_lowercase).difference(VOWELLS)
     _get_letters_cache += list(
-      [letter, True] for letter in VOWELLS
+      [letter, [letter], True] for letter in VOWELLS
     )
     _get_letters_cache += list(
-      [letter, False] for letter in CONSONANTES
+      [letter, [letter], False] for letter in CONSONANTES
     )
   return _get_letters_cache
 
@@ -25,3 +26,18 @@ def is_vowell(letter):
     return next(l[-1] for l in _get_letters() if l[0] == letter)
   except StopIteration:
     raise IndexError(letter)
+
+def to_tipa(letter):
+  if type(letter) is not unicode:
+    letter = unicode(letter, "utf-8")
+  try:
+    l = next(l[1][0] for l in _get_letters() if l[0] == letter)
+  except StopIteration:
+    raise IndexError(letter)
+  if len(l) == 4 and l[0] == '\\' and l[-1] == ' ' and (
+      l[1] not in string.ascii_lowercase and
+      l[1] not in string.ascii_uppercase 
+    ):
+    l = l[:-1]
+  return l
+
