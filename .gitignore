@@ -63,3 +63,5 @@ target/
 
 # Local makefile
 local.mak
+
+out/
