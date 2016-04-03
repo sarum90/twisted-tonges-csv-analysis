@@ -5,6 +5,7 @@ import unittest
 from itertools import izip
 from csv_loader import csv_rows
 from letters import is_vowell
+from analyse import tones_to_melody
 from word_parsing import (
     BadIPATone,
     InvalidLetter,
@@ -25,6 +26,15 @@ class TestWordParsing(unittest.TestCase):
   """
   Tests for all of the layers of word parsing.
   """
+
+  def test_tones_to_melody(self):
+    """
+    Duplicate adjacent tones are be removed to become melodies.
+    """
+    self.assertEqual(tones_to_melody('112233'), '123')
+    self.assertEqual(tones_to_melody(''), '')
+    self.assertEqual(tones_to_melody('12322'), '1232')
+    self.assertEqual(tones_to_melody('11'), '1')
 
   def test_letter_keys(self):
     a = {}
