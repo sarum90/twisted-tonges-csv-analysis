@@ -214,6 +214,90 @@ def compute_counts(word_counts, outdir):
   process_data(vowell_set, consonant_cluster_set, syllable_counts, outdir)
 
 
+def tones_to_melody(tones):
+  last_t = None
+  retval = []
+  for t in tones:
+    if t != last_t:
+      retval.append(t)
+      last_t = t
+  return ''.join(retval)
+
+
+def catogory_melody_to_table(counts, melodies, categories):
+  melodies = sorted(list(melodies), key=lambda x: (len(x), x))
+  categories = sorted(list(categories))
+
+  _O = u'Other'
+
+  # PutOther at the end of the list.
+  categories = (
+      list(c for c in categories if c != _O) +
+      list(c for c in categories if c == _O)
+  )
+
+  rows = [
+    [u'Melody'] + melodies + [u'Total'],
+  ]
+
+  def total_for_category(c):
+    return sum(counts[(m, c)] for m in melodies)
+
+  def total_for_melody(m):
+    return sum(counts[(m, c)] for c in categories)
+
+  for c in categories:
+    row = [c]
+    for m in melodies:
+      row.append(unicode(counts[(m, c)]))
+    row.append(unicode(total_for_category(c)))
+    rows.append(row)
+
+  rows.append(
+      [u'Total'] +
+      list(unicode(total_for_melody(m)) for m in melodies) +
+      [unicode(sum(total_for_melody(m) for m in melodies))]
+  )
+
+  return rows
+
+
+def compute_melodies(word_counts, outdir):
+  counts_of_category_melody = defaultdict(lambda: 0)
+  valid_melodies = set()
+  valid_categories = set()
+
+  for word in word_counts.keys():
+    if word.category:
+      tones = ''.join(s.tone for s in word.iter_syllables())
+      melody = unicode(tones_to_melody(tones))
+      category = unicode(word.category).upper()
+      
+      if category == u'V' or category == u'AUX':
+        category = u'V'
+      elif category == u'N':
+        category = u'N'
+      elif category == u'I':
+        category = u'I'
+      elif category == u'A':
+        category = u'A'
+      else:
+        category = u'Other'
+
+      if len(melody) > 0 and len(melody) < 3:
+        valid_melodies.add(melody)
+        valid_categories.add(category)
+        counts_of_category_melody[(melody, category)] += 1
+  
+  melody_table = catogory_melody_to_table(
+      counts_of_category_melody, valid_melodies, valid_categories)
+
+  dump_to_file(
+      os.path.join(outdir, 'melody_by_category.tex'),
+      make_tabular(melody_table).encode('utf-8')
+  )
+
+
 def analyze(filename, outdir):
   if not os.path.isdir(outdir):
     os.mkdir(outdir)
@@ -221,18 +305,21 @@ def analyze(filename, outdir):
   print "Loaded %d words" % len(word_counts)
 
   compute_counts(word_counts, outdir)
+  compute_melodies(word_counts, outdir)
 
 
 if __name__ == "__main__":
   def raiseUsage(arg):
     raise SystemExit(
-        'Invalid invocation(%s)!\n\nUsage: python %s <csv-file-to-analyze>' %
+        'Invalid invocation(%s)!\n\n'
+        'Usage: python %s <csv-file-to-analyze> <output-directory>' %
         (arg, sys.argv[0]))
 
-  if len(sys.argv) != 2:
-    raiseUsage('requires an argument')
+  if len(sys.argv) != 3:
+    raiseUsage('requires two arguments')
 
   filename = sys.argv[1]
+  output_directory = sys.argv[2]
   if not os.path.isfile(filename):
     raiseUsage('%s not a file' % repr(filename))
-  analyze(filename, './out')
+  analyze(filename, output_directory)

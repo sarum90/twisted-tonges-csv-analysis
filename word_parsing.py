@@ -30,6 +30,10 @@ class Word(object):
 
   def __hash__(self):
     return hash((self._morphemes, self._syllables, self._category))
+
+  @property
+  def category(self):
+    return self._category
   
   def iter_morphemes(self):
     for m in self._morphemes:
@@ -107,6 +111,10 @@ class Syllable(object):
     Returns a tuple of the letters in this syllable.
     """
     return tuple(self._letters)
+
+  @property
+  def tone(self):
+    return self._tone
 
   def __hash__(self):
     return hash((
