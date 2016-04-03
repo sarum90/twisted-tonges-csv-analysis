@@ -332,16 +332,22 @@ def sparse_to_dense(name, matrix):
   column_names = sorted(list(column_names))
   row_names = sorted(list(row_names))
 
-  rows = [
-    [name] + list(render_syllable(c) for c in column_names) + [u'Total'],
-  ]
+  def total_for_row(r):
+    return sum(matrix[(r, c)] for c in column_names)
+
+  row_names = list(r for r in row_names if total_for_row(r) > 10)
 
   def total_for_column(c):
     return sum(matrix[(r, c)] for r in row_names)
 
+  column_names = list(c for c in column_names if total_for_column(c) > 10)
+
   def total_for_row(r):
     return sum(matrix[(r, c)] for c in column_names)
 
+  rows = [
+    [name] + list(render_syllable(c) for c in column_names) + [u'Total'],
+  ]
 
   for r in row_names:
     row = [render_syllable(r)]
@@ -380,16 +386,20 @@ def compute_disyllables(word_counts, outdir):
   second_syllable_counts = defaultdict(lambda: 0)
   consonant_relations = defaultdict(lambda: 0)
   vowel_relations = defaultdict(lambda: 0)
+  complete_morphemes = set()
   for w in word_counts:
-    for m, ss in w.iter_complete_morphemes():
-      if len(ss) == 2:
-        first_syllable = syllable_to_cv(ss[0])
-        second_syllable = syllable_to_cv(ss[1])
-        if second_syllable:
-          second_syllable_counts[second_syllable] += 1
-          if first_syllable:
-            consonant_relations[(first_syllable[0], second_syllable[0])] += 1
-            vowel_relations[(first_syllable[1], second_syllable[1])] += 1
+    for c in w.iter_complete_morphemes():
+      complete_morphemes.add(c)
+
+  for m, ss in complete_morphemes:
+    if len(ss) == 2:
+      first_syllable = syllable_to_cv(ss[0])
+      second_syllable = syllable_to_cv(ss[1])
+      if second_syllable:
+        second_syllable_counts[second_syllable] += 1
+        if first_syllable:
+          consonant_relations[(first_syllable[0], second_syllable[0])] += 1
+          vowel_relations[(first_syllable[1], second_syllable[1])] += 1
   dump_to_file(
       os.path.join(outdir, 'second_syllable_consonants_vowels.tex'),
       make_tabular(sparse_to_dense(

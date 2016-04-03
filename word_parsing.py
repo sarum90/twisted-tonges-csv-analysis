@@ -60,7 +60,7 @@ class Word(object):
         # If we have both syllables and morphemes pending, we should yield
         # them.
         if pending_syllables and pending_morpheme:
-          yield pending_morpheme, pending_syllables
+          yield pending_morpheme, tuple(pending_syllables)
 
         # Either way we should reset the pending variables.
         pending_morpheme = next(morpheme_iter)
