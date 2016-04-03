@@ -2,7 +2,7 @@
 from itertools import izip_longest, islice
 import re
 
-from letters import is_vowell, to_tipa
+from letters import is_vowell, to_tipa, to_order_tuple
 
 class WordParseError(Exception):
   pass
@@ -43,6 +43,48 @@ class Word(object):
     for s in self._syllables:
       yield s
 
+  def iter_complete_morphemes(self):
+    """
+    Iterates through "complete" morphemes. That is, morphemes who only contain
+    whole syllables.
+    """
+    consumed_morpheme_letters = 0
+    consumed_syllable_letters = 0
+    syllable_iter = self.iter_syllables()
+    morpheme_iter = self.iter_morphemes()
+    pending_morphemes = None
+    pending_syllables = []
+
+    while True:
+      if consumed_morpheme_letters == consumed_syllable_letters:
+        # If we have both syllables and morphemes pending, we should yield
+        # them.
+        if pending_syllables and pending_morpheme:
+          yield pending_morpheme, pending_syllables
+
+        # Either way we should reset the pending variables.
+        pending_morpheme = next(morpheme_iter)
+        consumed_morpheme_letters += pending_morpheme.letter_count()
+
+        s = next(syllable_iter)
+        consumed_syllable_letters += s.letter_count()
+        pending_syllables = [s]
+
+      elif consumed_syllable_letters < consumed_morpheme_letters:
+        # There are more syllables in this morpheme.
+        s = next(syllable_iter)
+        consumed_syllable_letters += s.letter_count()
+        pending_syllables.append(s)
+
+      elif consumed_morpheme_letters < consumed_syllable_letters:
+        # Well, both the current pending morpheme and the next morpheme must be
+        # invalid. Consume them, but indicate they are invalid by setting the
+        # pending morpheme to None.
+        m = next(morpheme_iter)
+        consumed_morpheme_letters += m.letter_count()
+        pending_morpheme = None
+
+
 
 class Morpheme(object):
 
@@ -81,6 +123,16 @@ class Morpheme(object):
   def iter_letters(self):
     for l in self._letters:
       yield l
+
+  def letter_count(self):
+    return len(self._letters)
+
+  def text(self):
+    return ''.join(l.text() for l in self.iter_letters())
+
+  @property
+  def gloss(self):
+    return self._gloss
 
 
 class SyllablesMustHaveVowells(WordParseError):
@@ -130,6 +182,13 @@ class Syllable(object):
   def iter_letters(self):
     for l in self._letters:
       yield l
+
+  def letter_count(self):
+    return len(self._letters)
+
+  def text(self):
+    return ''.join(l.text() for l in self.iter_letters())
+
 
 class InvalidLetter(WordParseError):
   pass
@@ -188,16 +247,16 @@ class Letter(object):
         self._is_long == other._is_long
     )
 
+  def _to_tuple(self):
+    return (
+      to_order_tuple(self._text),
+      self._is_nasal,
+      self._is_labialized,
+      self._is_long
+    )
+
   def __lt__(self, other):
-    if self._text < other._text:
-      return True
-    if not self._is_nasal and other._is_nasal:
-      return True
-    if not self._is_labialized and other._is_labialized:
-      return True
-    if not self._is_long and other._is_long:
-      return True
-    return False
+    return self._to_tuple() < other._to_tuple()
 
   def __le__(self, other):
     return self == other or self < other

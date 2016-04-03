@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 
 import json
 from string import ascii_lowercase
@@ -41,3 +41,23 @@ def to_tipa(letter):
     l = l[:-1]
   return l
 
+def _safe_index(l, v):
+  try:
+    return l.index(v)
+  except ValueError:
+    return None
+
+def to_order_tuple(letter):
+  return (
+      _safe_index(_VOWEL_ORDER, letter),
+      _safe_index(_CONSONANT_ORDER, letter),
+      unicode(letter)
+  )
+
+
+_CONSONANT_ORDER = (
+  u'pbtdʈɖcɟkɡqɢʔmɱnɳɲŋɴʙrʀⱱɾɽɸβfvθðszʃʒʂʐçʝxɣχʁħʕhɦɬɮʋɹɻjwɥɰlɭʎʟʘǀǃǂǁɓɗʄɠʛʍʜʢ'
+  u'ʡɕʑɺɧ'
+)
+
+_VOWEL_ORDER = u'iyɨʉɯuɪʏʊeøɘɵɤoɛœɜɞʌɔæɐaɶɑɒə'

@@ -74,7 +74,7 @@ def print_table(rows):
   for r in rows:
     print u'\t'.join(r).encode('utf-8')
 
-def make_tabular(rows):
+def make_tabular(rows, has_summary_row=True):
   output_rows = []
   rows_iter = iter(rows)
   rows_iter, leading_rows_iter = itertools.tee(rows_iter)
@@ -91,7 +91,8 @@ def make_tabular(rows):
 
   last_row = rows[-1]
 
-  output_rows.extend(u'\\hline' for _ in xrange(2))
+  if has_summary_row:
+    output_rows.extend(u'\\hline' for _ in xrange(2))
   output_rows.append(u'%s \\\\' % u' & '.join(last_row))
 
   output_rows.append(u'\end{tabular}')
@@ -166,7 +167,10 @@ def dump_to_file(filename, data):
 
 
 def process_data(vowells, consonant_clusters, syllable_counts, outdir):
-  consonant_clusters = list(c for c in consonant_clusters if not (len(c)==2 and c[1]==make_letter("l")))
+  consonant_clusters = list(
+      c for c in consonant_clusters
+      if not (len(c)==2 and c[1]==make_letter("l"))
+  )
   vowells = list(v for v in vowells if not any(vl.is_nasal for vl in v))
   all_data = SyllableCounter(syllable_counts, vowells, consonant_clusters)
   _MIN_SIGNIFICANT_COUNT = 10
@@ -237,22 +241,35 @@ def catogory_melody_to_table(counts, melodies, categories):
       list(c for c in categories if c == _O)
   )
 
+  def total_for_melody(m):
+    return sum(counts[(m, c)] for c in categories)
+
+  melodies = list(
+      m for m in melodies if total_for_melody(m) >= 45 and m != '43'
+  )
+
   rows = [
     [u'Melody'] + melodies + [u'Total'],
+  ]
+
+  percent_rows = [
+    [u'Melody Fraction'] + melodies + [u'Total'],
   ]
 
   def total_for_category(c):
     return sum(counts[(m, c)] for m in melodies)
 
-  def total_for_melody(m):
-    return sum(counts[(m, c)] for c in categories)
 
   for c in categories:
     row = [c]
+    percent_row = [c]
     for m in melodies:
       row.append(unicode(counts[(m, c)]))
+      percent_row.append(u'%.3f' % (float(counts[(m, c)])/total_for_category(c)))
     row.append(unicode(total_for_category(c)))
+    percent_row.append(unicode('1.0'))
     rows.append(row)
+    percent_rows.append(percent_row)
 
   rows.append(
       [u'Total'] +
@@ -260,7 +277,7 @@ def catogory_melody_to_table(counts, melodies, categories):
       [unicode(sum(total_for_melody(m) for m in melodies))]
   )
 
-  return rows
+  return rows, percent_rows
 
 
 def compute_melodies(word_counts, outdir):
@@ -290,13 +307,105 @@ def compute_melodies(word_counts, outdir):
         valid_categories.add(category)
         counts_of_category_melody[(melody, category)] += 1
   
-  melody_table = catogory_melody_to_table(
+  melody_table, melody_percent_table = catogory_melody_to_table(
       counts_of_category_melody, valid_melodies, valid_categories)
 
   dump_to_file(
       os.path.join(outdir, 'melody_by_category.tex'),
       make_tabular(melody_table).encode('utf-8')
   )
+
+  dump_to_file(
+      os.path.join(outdir, 'melody_percent_by_category.tex'),
+      make_tabular(melody_percent_table, has_summary_row=False).encode('utf-8')
+  )
+
+def sparse_to_dense(name, matrix):
+
+  column_names = set()
+  row_names = set()
+
+  for r, c in matrix.keys():
+    row_names.add(r)
+    column_names.add(c)
+
+  column_names = sorted(list(column_names))
+  row_names = sorted(list(row_names))
+
+  rows = [
+    [name] + list(render_syllable(c) for c in column_names) + [u'Total'],
+  ]
+
+  def total_for_column(c):
+    return sum(matrix[(r, c)] for r in row_names)
+
+  def total_for_row(r):
+    return sum(matrix[(r, c)] for c in column_names)
+
+
+  for r in row_names:
+    row = [render_syllable(r)]
+    for c in column_names:
+      row.append(unicode(matrix[(r, c)]))
+    row.append(unicode(total_for_row(r)))
+    rows.append(row)
+
+  rows.append(
+      [u'Total'] +
+      list(unicode(total_for_column(c)) for c in column_names) +
+      [unicode(sum(total_for_column(c) for c in column_names))]
+  )
+
+  return rows
+
+
+def syllable_to_cv(syllable):
+    cls = list(iter_clusters(syllable.iter_letters()))
+    if len(cls) <= 2 and any(v.is_vowell() for v in cls[-1]):
+      consonant_cluster = () if len(cls) == 1 else cls[0]
+      vowel = cls[-1]
+      if (
+          len(consonant_cluster) == 2 and
+          consonant_cluster[1] == make_letter("l")
+      ) or (
+        any(v.is_nasal for v in vowel)
+      ):
+        return None
+      return (consonant_cluster, vowel)
+    return None
+  
+
+
+def compute_disyllables(word_counts, outdir):
+  second_syllable_counts = defaultdict(lambda: 0)
+  consonant_relations = defaultdict(lambda: 0)
+  vowel_relations = defaultdict(lambda: 0)
+  for w in word_counts:
+    for m, ss in w.iter_complete_morphemes():
+      if len(ss) == 2:
+        first_syllable = syllable_to_cv(ss[0])
+        second_syllable = syllable_to_cv(ss[1])
+        if second_syllable:
+          second_syllable_counts[second_syllable] += 1
+          if first_syllable:
+            consonant_relations[(first_syllable[0], second_syllable[0])] += 1
+            vowel_relations[(first_syllable[1], second_syllable[1])] += 1
+  dump_to_file(
+      os.path.join(outdir, 'second_syllable_consonants_vowels.tex'),
+      make_tabular(sparse_to_dense(
+        'Second Syllable', second_syllable_counts)).encode('utf-8')
+  )
+  dump_to_file(
+      os.path.join(outdir, 'disyllable_consonant_first_to_second.tex'),
+      make_tabular(sparse_to_dense(
+        'Disyllable Consonants', consonant_relations)).encode('utf-8')
+  )
+  dump_to_file(
+      os.path.join(outdir, 'disyllable_vowel_first_to_second.tex'),
+      make_tabular(sparse_to_dense(
+        'Disyllalbe Vowels', vowel_relations)).encode('utf-8')
+  )
+
 
 
 def analyze(filename, outdir):
@@ -307,6 +416,7 @@ def analyze(filename, outdir):
 
   compute_counts(word_counts, outdir)
   compute_melodies(word_counts, outdir)
+  compute_disyllables(word_counts, outdir)
 
 
 if __name__ == "__main__":

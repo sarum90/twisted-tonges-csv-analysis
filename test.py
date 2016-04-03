@@ -157,6 +157,27 @@ class TestWordParsing(unittest.TestCase):
           lambda: make_word(x, 'gloss', 'category')
       )
 
+  def test_word_complete_morphemes(self):
+    for parsed, manually in [
+          (
+            make_word('koka-n-o^{12.3.4}', 'A-B-C', 'N'),
+            [(make_morpheme('koka', 'A'), make_syllables('koka', '12.3'))]
+          ),
+          (
+            make_word('bo^{1}', 'A', 'N'),
+            [(make_morpheme('bo', 'A'), make_syllables('bo', '1'))]
+          ),
+          (
+            make_word('b-o-kana-p-o^{1.2.2.3}', 'PART-PART-C-D-E', 'N'),
+            [(make_morpheme('kana', 'C'), make_syllables('kana', '2.2'))]
+          ),
+          (
+            make_word('b-o-p-o^{1.2}', 'PART-A-B-C', 'N'),
+            []
+          ),
+    ]:
+      self.assertEqual(list(parsed.iter_complete_morphemes()), manually)
+
   def test_word_parsing(self):
     """
     Verify that words are correctly parsed into morphemes.
