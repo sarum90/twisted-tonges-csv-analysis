@@ -166,7 +166,13 @@ class Letter(object):
     return self._is_nasal
 
   def is_vowell(self):
-    return is_vowell(self._text)
+    try:
+      return is_vowell(self._text)
+    except IndexError as e:
+      raise InvalidLetter(
+          "Unknown letter when determining if something was a vowell: '%s'" %
+          e.args[0]
+      )
 
   def to_tipa(self):
     return '%s%s%s' % (
