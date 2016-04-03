@@ -6,7 +6,7 @@ from itertools import izip
 import itertools
 from collections import defaultdict
 from csv_loader import csv_rows
-from word_parsing import (make_word, WordParseError)
+from word_parsing import (make_word, make_letter, WordParseError)
 from syllable_counter import SyllableCounter
 
 def load_word_counts(filename):
@@ -166,6 +166,7 @@ def dump_to_file(filename, data):
 
 
 def process_data(vowells, consonant_clusters, syllable_counts, outdir):
+  consonant_clusters = list(c for c in consonant_clusters if not (len(c)==2 and c[1]==make_letter("l")))
   vowells = list(v for v in vowells if not any(vl.is_nasal for vl in v))
   all_data = SyllableCounter(syllable_counts, vowells, consonant_clusters)
   _MIN_SIGNIFICANT_COUNT = 10
