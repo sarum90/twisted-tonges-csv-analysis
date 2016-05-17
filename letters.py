@@ -10,7 +10,9 @@ def _get_letters():
   if _get_letters_cache is None:
     _get_letters_cache = json.load(open('letters.json'))
     VOWELLS = set(x for x in 'aeiouy')
-    CONSONANTES = set(ascii_lowercase).difference(VOWELLS)
+    CONSONANTES = set(ascii_lowercase).difference(VOWELLS).union(
+        set(['kp', 'gb'])
+    )
     _get_letters_cache += list(
       [letter, [letter], True] for letter in VOWELLS
     )
