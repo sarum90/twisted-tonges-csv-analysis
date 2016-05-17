@@ -53,6 +53,10 @@ class TestWordParsing(unittest.TestCase):
       (u'k^{w} ɔ', [u'k^{w}', u'ɔ']),
       (u'k^{w}(\~ɔ)', [u'k^{w}', u'\~ɔ']),
       (u'k^{w}ɔ:', [u'k^{w}', u'ɔ:']),
+      (u'kpa', [u'kp', u'a']),
+      (u'kba', [u'k', u'b', u'a']),
+      (u'gba', [u'gb', u'a']),
+      (u'gpa', [u'g', u'p', u'a']),
     ]:
       self.assertEqual(make_letters(input_text),
                        list(make_letter(x) for x in expected))
@@ -253,6 +257,8 @@ class TestLetters(unittest.TestCase):
     self.assertFalse(is_vowell('l'))
     self.assertFalse(is_vowell('k'))
     self.assertFalse(is_vowell('ʤ'))
+    self.assertFalse(is_vowell('kp'))
+    self.assertFalse(is_vowell('gb'))
 
   def test_is_not_letter(self):
     """

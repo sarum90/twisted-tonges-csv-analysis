@@ -301,6 +301,7 @@ _LABIALIZED = '^{w}'
 _NASAL_SUFFIX_1 = '^~'
 _NASAL_SUFFIX_2 = '^{~}'
 _NASAL_SUFFIX_3 = '~'
+_DIGRAPHS = ['kp', 'gb']
 
 def make_letter(text):
   is_labialized = False
@@ -339,6 +340,8 @@ def make_letters(text):
     split = 1
     if processed_text.startswith(_NASAL):
       split = len(_NASAL)+1
+    elif any(processed_text.startswith(x) for x in _DIGRAPHS):
+      split = 2
 
     letter = processed_text[:split]
     rest = processed_text[split:]
