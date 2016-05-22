@@ -416,6 +416,41 @@ def compute_disyllables(word_counts, outdir):
         'Disyllalbe Vowels', vowel_relations)).encode('utf-8')
   )
 
+def extract_c_number(string, number, relneg, relpos):
+    found_cs = 0
+    for i in xrange(len(string)):
+        c = string[i]
+        if c == 'C':
+            if found_cs == number:
+                return string[i+relneg:i+relpos]
+            found_cs += 1
+    return None
+
+
+def compute_cvcv_ccv(word_counts, outdir):
+    struct_counts = defaultdict(lambda : dict(CVCV=0, CCV=0))
+    cvcv_total = 0
+    ccv_total = 0
+    for word, count in word_counts.iteritems():
+        consonants = tuple(
+            l for l in word.iter_letters() if not l.is_vowell()
+        )
+        padded_structure = 'VVVVVV%sCCCCCCC' % ''.join([
+            'V' if l.is_vowell() else 'C' for l in word.iter_letters()
+        ])
+        for i in xrange(len(consonants)):
+            key = (word.gloss, consonants, i)
+            if extract_c_number(padded_structure, i, -1, 4) == 'VCVCV':
+                struct_counts[key]['CVCV'] += count
+                cvcv_total += count
+            if extract_c_number(padded_structure, i, -1, 3) == 'VCCV':
+                struct_counts[key]['CCV'] += count
+                ccv_total += count
+    print "HERE"
+    print "CVCV: ", cvcv_total
+    print "CCV: ", ccv_total
+    for k, v in struct_counts.iteritems():
+        print k, v
 
 
 def analyze(filename, outdir):
@@ -427,6 +462,7 @@ def analyze(filename, outdir):
   compute_counts(word_counts, outdir)
   compute_melodies(word_counts, outdir)
   compute_disyllables(word_counts, outdir)
+  compute_cvcv_ccv(word_counts, outdir)
 
 
 if __name__ == "__main__":

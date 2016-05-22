@@ -5,7 +5,7 @@ import unittest
 from itertools import izip
 from csv_loader import csv_rows
 from letters import is_vowell
-from analyse import tones_to_melody
+from analyse import tones_to_melody, extract_c_number
 from word_parsing import (
     BadIPATone,
     InvalidLetter,
@@ -26,6 +26,14 @@ class TestWordParsing(unittest.TestCase):
   """
   Tests for all of the layers of word parsing.
   """
+
+  def extract_c_number(self):
+    for args, expected in [
+      (('VVVCVCVCCC', 0, -1, 4), 'VCVCV'),
+      (('VVVCVCVCCC', 1, -1, 4), 'VCVCC'),
+      (('VVVCCVCVCCC', 0, -1, 3), 'VCCV')
+    ]:
+      self.assertEqual(extract_c_number(*args), expected)
 
   def test_tones_to_melody(self):
     """

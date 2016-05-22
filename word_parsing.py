@@ -34,6 +34,10 @@ class Word(object):
   @property
   def category(self):
     return self._category
+
+  @property
+  def gloss(self):
+    return '-'.join([m.gloss for m in self.iter_morphemes() if m.gloss])
   
   def iter_morphemes(self):
     for m in self._morphemes:
@@ -42,6 +46,11 @@ class Word(object):
   def iter_syllables(self):
     for s in self._syllables:
       yield s
+
+  def iter_letters(self):
+    for s in self._syllables:
+      for l in s.iter_letters():
+        yield l
 
   def iter_complete_morphemes(self):
     """
