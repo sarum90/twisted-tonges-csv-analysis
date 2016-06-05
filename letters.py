@@ -4,6 +4,8 @@ import json
 from string import ascii_lowercase
 import string
 
+_DIGRAPHS = ['kp', 'gb', u'\u0261b', u'mŋɡb', u'mb']
+
 _get_letters_cache = None
 def _get_letters():
   global _get_letters_cache
@@ -11,7 +13,7 @@ def _get_letters():
     _get_letters_cache = json.load(open('letters.json'))
     VOWELLS = set(x for x in 'aeiouy')
     CONSONANTES = set(ascii_lowercase).difference(VOWELLS).union(
-        set(['kp', 'gb'])
+        set(_DIGRAPHS)
     )
     _get_letters_cache += list(
       [letter, [letter], True] for letter in VOWELLS

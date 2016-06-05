@@ -2,10 +2,27 @@
 from itertools import izip_longest, islice
 import re
 
-from letters import is_vowell, to_tipa, to_order_tuple
+from letters import is_vowell, to_tipa, to_order_tuple, _DIGRAPHS
+
+class _LetterInstance(object):
+  def __init__(self, word, index):
+    self._word = word
+    self._index = index
+
+  def syllable(self):
+    letters_count = self._index
+    for s in self._word.iter_syllables():
+      letters_count -= len(list(s.iter_letters()))
+      if letters_count < 0:
+        return s
+
+  def letter(self):
+    return list(self._word.iter_letters())[self._index]
+
 
 class WordParseError(Exception):
   pass
+
 
 class Word(object):
 
@@ -30,6 +47,10 @@ class Word(object):
 
   def __hash__(self):
     return hash((self._morphemes, self._syllables, self._category))
+
+  def iter_letter_instances(self):
+    for i in xrange(len(list(self.iter_letters()))):
+      yield _LetterInstance(self, i)
 
   @property
   def category(self):
@@ -92,6 +113,12 @@ class Word(object):
         m = next(morpheme_iter)
         consumed_morpheme_letters += m.letter_count()
         pending_morpheme = None
+
+  def text(self):
+    return u'%s^{%s}' % (
+        u''.join(l.text() for l in self.iter_letters()),
+        u'.'.join(s.tone for s in self.iter_syllables())
+    )
 
 
 
@@ -310,7 +337,6 @@ _LABIALIZED = '^{w}'
 _NASAL_SUFFIX_1 = '^~'
 _NASAL_SUFFIX_2 = '^{~}'
 _NASAL_SUFFIX_3 = '~'
-_DIGRAPHS = ['kp', 'gb']
 
 def make_letter(text):
   is_labialized = False
@@ -349,8 +375,11 @@ def make_letters(text):
     split = 1
     if processed_text.startswith(_NASAL):
       split = len(_NASAL)+1
-    elif any(processed_text.startswith(x) for x in _DIGRAPHS):
-      split = 2
+    else:
+      for x in _DIGRAPHS:
+        if processed_text.startswith(x):
+          split = len(x)
+          break
 
     letter = processed_text[:split]
     rest = processed_text[split:]

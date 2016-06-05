@@ -5,7 +5,7 @@ import unittest
 from itertools import izip
 from csv_loader import csv_rows
 from letters import is_vowell
-from analyse import tones_to_melody, extract_c_number
+from analyse import tones_to_melody
 from word_parsing import (
     BadIPATone,
     InvalidLetter,
@@ -26,14 +26,6 @@ class TestWordParsing(unittest.TestCase):
   """
   Tests for all of the layers of word parsing.
   """
-
-  def extract_c_number(self):
-    for args, expected in [
-      (('VVVCVCVCCC', 0, -1, 4), 'VCVCV'),
-      (('VVVCVCVCCC', 1, -1, 4), 'VCVCC'),
-      (('VVVCCVCVCCC', 0, -1, 3), 'VCCV')
-    ]:
-      self.assertEqual(extract_c_number(*args), expected)
 
   def test_tones_to_melody(self):
     """
@@ -64,6 +56,7 @@ class TestWordParsing(unittest.TestCase):
       (u'kpa', [u'kp', u'a']),
       (u'kba', [u'k', u'b', u'a']),
       (u'gba', [u'gb', u'a']),
+      (u'\u0261ba', [u'\u0261b', u'a']), # Unicode IPA g
       (u'gpa', [u'g', u'p', u'a']),
     ]:
       self.assertEqual(make_letters(input_text),
@@ -244,6 +237,21 @@ class TestWordParsing(unittest.TestCase):
          make_word('koka-nu-po^{12.3.4.65}', 'PART-B-C', 'N'))
     ]:
       self.assertNotEqual(a, b)
+
+  def test_iter_letters(self):
+    word = make_word('bace-di-fo^{1.2.3.4}', 'A-B-C', 'N')
+    for (li, expected_tone) in zip(
+        list(x for x in word.iter_letter_instances()),
+        list(c for c in '11223344')
+    ):
+      self.assertEqual(li.syllable().tone, expected_tone)
+
+    for (li, expected_letter) in zip(
+        list(x for x in word.iter_letter_instances()),
+        list(c for c in 'bacedifo')
+    ):
+      self.assertEqual(li.letter().text(), expected_letter)
+
 
 class TestLetters(unittest.TestCase):
   """

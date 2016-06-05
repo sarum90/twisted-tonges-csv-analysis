@@ -416,41 +416,110 @@ def compute_disyllables(word_counts, outdir):
         'Disyllalbe Vowels', vowel_relations)).encode('utf-8')
   )
 
-def extract_c_number(string, number, relneg, relpos):
+def index_of_consonant(string, number):
     found_cs = 0
     for i in xrange(len(string)):
         c = string[i]
-        if c == 'C':
+        if not c.letter().is_vowell():
             if found_cs == number:
-                return string[i+relneg:i+relpos]
+                return i
             found_cs += 1
     return None
 
+def is_ccv(string, index):
+    if index > 0:
+        if not string[index-1].letter().is_vowell():
+            return False
+    candidate = string[index:index+3]
+    if ('CCV' == ''.join(
+            'V' if c.letter().is_vowell() else 'C' for c in candidate
+    )):
+        return candidate
+    return False
+
+def is_cvcv(string, index):
+    if index > 0:
+        if not string[index-1].letter().is_vowell():
+            return False
+    candidate = string[index:index+4]
+    if ('CVCV' == ''.join(
+            'V' if c.letter().is_vowell() else 'C' for c in candidate
+    )):
+        return candidate
+    return False
 
 def compute_cvcv_ccv(word_counts, outdir):
-    struct_counts = defaultdict(lambda : dict(CVCV=0, CCV=0))
+    struct_counts = defaultdict(lambda : dict(
+        CVCV=0, CCV=0, words=set(), V1=set(), V2=set(), T1=set(), T2=set()
+    ))
     cvcv_total = 0
     ccv_total = 0
     for word, count in word_counts.iteritems():
         consonants = tuple(
             l for l in word.iter_letters() if not l.is_vowell()
         )
-        padded_structure = 'VVVVVV%sCCCCCCC' % ''.join([
-            'V' if l.is_vowell() else 'C' for l in word.iter_letters()
-        ])
+        letter_instances = list(l for l in word.iter_letter_instances())
         for i in xrange(len(consonants)):
-            key = (word.gloss, consonants, i)
-            if extract_c_number(padded_structure, i, -1, 4) == 'VCVCV':
+            gloss = word.gloss.replace('IPFV', 'PFV').replace('PFV', '(I)PFV')
+            gloss = gloss.split('.')[0]
+            key = (gloss, consonants, i)
+            c_index = index_of_consonant(letter_instances, i)
+            ccv_c = is_ccv(letter_instances, c_index)
+            cvcv_c = is_cvcv(letter_instances, c_index)
+            if cvcv_c:
                 struct_counts[key]['CVCV'] += count
+                w = struct_counts[key]['words']
+                struct_counts[key]['words'] = w.union(set([word]))
+                v1 = struct_counts[key]['V1']
+                struct_counts[key]['V1'] = v1.union(set([cvcv_c[1].letter()]))
+                v2 = struct_counts[key]['V2']
+                struct_counts[key]['V2'] = v2.union(set([cvcv_c[3].letter()]))
+                t1 = struct_counts[key]['T1']
+                struct_counts[key]['T1'] = t1.union(
+                        set([cvcv_c[1].syllable().tone]))
+                t2 = struct_counts[key]['T2']
+                struct_counts[key]['T2'] = t2.union(
+                        set([cvcv_c[3].syllable().tone]))
                 cvcv_total += count
-            if extract_c_number(padded_structure, i, -1, 3) == 'VCCV':
+            if ccv_c:
                 struct_counts[key]['CCV'] += count
+                w = struct_counts[key]['words']
+                struct_counts[key]['words'] = w.union(set([word]))
+                v2 = struct_counts[key]['V2']
+                struct_counts[key]['V2'] = v2.union(set([ccv_c[2].letter()]))
+                t2 = struct_counts[key]['T2']
+                struct_counts[key]['T2'] = t2.union(
+                        set([ccv_c[2].syllable().tone]))
                 ccv_total += count
-    print "HERE"
-    print "CVCV: ", cvcv_total
-    print "CCV: ", ccv_total
+
+    rows = [
+        (u"Gloss",u"consonants",u"index",u"cvcv",u"ccv",u"words","C1","C2",
+         "V1","V2","T1","T2")
+    ]
     for k, v in struct_counts.iteritems():
-        print k, v
+        row = tuple(
+                unicode(u) for u in (
+                    k[0],
+                    ''.join(l.text() for l in k[1]),
+                    k[2], 
+                    v['CVCV'],
+                    v['CCV'],
+                    ", ".join(w.text() for w in v['words']),
+                    k[1][k[2]].text(),
+                    k[1][k[2]+1].text(),
+                    ', '.join(set(x.text() for x in v['V1']) or set(["?"])),
+                    ', '.join(set(x.text() for x in v['V2']) or set(["?"])),
+                    ', '.join(l if l else '?' for l in (v['T1'] or set(["?"]))),
+                    ', '.join(l if l else '?' for l in (v['T2'] or set(["?"]))),
+                )
+        )
+        rows.append(row)
+
+
+    for row in rows:
+        print unicode(
+            u','.join(('"%s"' % f.replace(u'"', u'""') for f in row))
+        ).encode('utf-8')
 
 
 def analyze(filename, outdir):
